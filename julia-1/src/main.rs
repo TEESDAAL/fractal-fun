@@ -1,4 +1,6 @@
 use macroquad::prelude::*;
+use std::sync::mpsc;
+use std::thread;
 
 #[derive(Debug, Copy, Clone)]
 struct ComplexNumber {
@@ -6,7 +8,7 @@ struct ComplexNumber {
     i: f64,
 }
 
-const MAX_ITERATIONS: i32 = 10000;
+const MAX_ITERATIONS: i32 = 10_000;
 const CUT_OFF_BOUND: f64 = 2.;
 impl std::ops::Mul<ComplexNumber> for ComplexNumber {
     type Output = ComplexNumber;
@@ -42,6 +44,7 @@ impl ComplexNumber {
     fn julia_iteration(&mut self, c: ComplexNumber) {
         *self = *self * *self + c;
     }
+
     fn compute_iterations(mut self, c: ComplexNumber) -> i32 {
         for i in 0..MAX_ITERATIONS {
             self.julia_iteration(c);
@@ -64,24 +67,68 @@ fn julia_color(num_iterations : i32) -> Color {
     }
 }
 
-#[macroquad::main("BasicShapes")]
-async fn main() {
-    let c = ComplexNumber::new(-0.391, -0.587);
-    // println!("{:?}", c.compute_iterations(c.clone()));
-    
-    loop {
-        clear_background(BLACK);
-        let shift = screen_height().ceil() as i32 / 2;
-        for y in 0..(screen_height().ceil() as i32) {
-            for x in 0..(screen_width().ceil() as i32) {
-                let point = ComplexNumber::new((x - shift) as f64 / 1000., -(y - shift) as f64/ 1000.);
-                let num_iter = point.compute_iterations(c);
-                let pixel_color = julia_color(num_iter);
-                // if num_iter != 0 {println!("{:?}", pixel_color);};
-
-                draw_rectangle(x as f32, y as f32, 1., 1., pixel_color)
+fn draw_julia(x_shift: f64, y_shift: f64, zoom: f64, c: ComplexNumber) {
+    clear_background(BLACK);
+    let (tx, rx) = mpsc::channel();
+    for y in 0..(screen_height().ceil() as i32) {
+       thread::spawn(move || {
+            let val = draw_julia_row(x_shift, y_shift, zoom, c, y)
+            tx.send(val);
             }
+        );
+    }
+
+    
+}
+fn draw_julia_row(x_shift: f64, y_shift: f64, zoom: f64, c: ComplexNumber, y: i32) -> (int, Vec<Color>) {
+    let colors = Vec::new();
+    for x in 0..(screen_width().ceil() as i32) {
+        let point = ComplexNumber::new((x as f64 - x_shift) / zoom, -(y as f64 - y_shift)/ zoom);
+        let num_iter = point.compute_iterations(c);
+        let pixel_color = julia_color(num_iter);
+
+        // draw_rectangle(x as f32, y as f32, 1., 1., pixel_color);
+    }
+}
+fn change_zoom(zoom: &mut f64) -> bool {
+    // Zooming with ctrl+/ctrl-
+    if is_key_down(KeyCode::LeftControl) && is_key_pressed(KeyCode::Minus) {
+        *zoom /= 1.5;
+        return true;
+    }
+    if is_key_down(KeyCode::LeftControl) && is_key_pressed(KeyCode::Equal) {
+        *zoom *= 1.5;
+        return true;
+    }
+
+    false
+}
+
+fn change_center(x_shift: &mut f64, y_shift: &mut f64) -> bool {
+    let mut moved = false;
+    let movements = [(KeyCode::Left, -1., 0.), (KeyCode::Right, 1., 0.), (KeyCode::Up, 0., -1.), (KeyCode::Down, 0., 1.)];
+    for (key, dx, dy) in &movements {
+        if is_key_down(*key) {
+            *x_shift += dx * 10.;
+            *y_shift += dy * 10.;
+            moved = true;
         }
+    }
+    return moved;
+
+}
+
+#[macroquad::main("Julia Sets :)")]
+async fn main() {
+    let mut zoom = 250.;
+    let c = ComplexNumber::new(-0.391, -0.587);
+    let mut x_shift =  screen_width().ceil() as f64 / 2.;
+    let mut y_shift =  screen_height().ceil() as f64 / 2.;
+    loop {
+        println!("frame");
+        let zoomed = change_zoom(&mut zoom);
+        let moved = change_center(&mut x_shift, &mut y_shift);
+        draw_julia(x_shift.clone(), y_shift.clone(), zoom.clone(), c.clone());
         next_frame().await
     }
 }
