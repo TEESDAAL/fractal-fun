@@ -71,24 +71,30 @@ fn draw_julia(x_shift: f64, y_shift: f64, zoom: f64, c: ComplexNumber) {
     clear_background(BLACK);
     let (tx, rx) = mpsc::channel();
     for y in 0..(screen_height().ceil() as i32) {
+        let tx = tx.clone();
        thread::spawn(move || {
-            let val = draw_julia_row(x_shift, y_shift, zoom, c, y)
-            tx.send(val);
+                let val = draw_julia_row(x_shift, y_shift, zoom, c, y);
+                tx.send(val).unwrap();
             }
         );
+    }
+    for _ in 0..(screen_height().ceil() as i32) {
+        let (y, colors) = rx.recv().unwrap();
+        for (x, color) in colors.iter().enumerate() {
+            draw_rectangle(x as f32, y as f32, 1., 1., *color);
+        }
     }
 
     
 }
-fn draw_julia_row(x_shift: f64, y_shift: f64, zoom: f64, c: ComplexNumber, y: i32) -> (int, Vec<Color>) {
-    let colors = Vec::new();
+fn draw_julia_row(x_shift: f64, y_shift: f64, zoom: f64, c: ComplexNumber, y: i32) -> (i32, Vec<Color>) {
+    let mut colors = Vec::new();
     for x in 0..(screen_width().ceil() as i32) {
         let point = ComplexNumber::new((x as f64 - x_shift) / zoom, -(y as f64 - y_shift)/ zoom);
         let num_iter = point.compute_iterations(c);
-        let pixel_color = julia_color(num_iter);
-
-        // draw_rectangle(x as f32, y as f32, 1., 1., pixel_color);
+        colors.push(julia_color(num_iter));
     }
+    return (y, colors);
 }
 fn change_zoom(zoom: &mut f64) -> bool {
     // Zooming with ctrl+/ctrl-
