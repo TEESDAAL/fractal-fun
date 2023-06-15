@@ -8,7 +8,7 @@ struct ComplexNumber {
     i: f64,
 }
 
-const MAX_ITERATIONS: i32 = 10_000;
+const MAX_ITERATIONS: i32 = 1_000;
 const CUT_OFF_BOUND: f64 = 2.;
 impl std::ops::Mul<ComplexNumber> for ComplexNumber {
     type Output = ComplexNumber;
@@ -72,11 +72,10 @@ fn draw_julia(x_shift: f64, y_shift: f64, zoom: f64, c: ComplexNumber) {
     let (tx, rx) = mpsc::channel();
     for y in 0..(screen_height().ceil() as i32) {
         let tx = tx.clone();
-       thread::spawn(move || {
-                let val = draw_julia_row(x_shift, y_shift, zoom, c, y);
-                tx.send(val).unwrap();
-            }
-        );
+        thread::spawn(move || {
+            let val = draw_julia_row(x_shift, y_shift, zoom, c, y);
+            tx.send(val).unwrap();
+        });
     }
     for _ in 0..(screen_height().ceil() as i32) {
         let (y, colors) = rx.recv().unwrap();
@@ -112,7 +111,7 @@ fn change_zoom(zoom: &mut f64) -> bool {
 
 fn change_center(x_shift: &mut f64, y_shift: &mut f64) -> bool {
     let mut moved = false;
-    let movements = [(KeyCode::Left, -1., 0.), (KeyCode::Right, 1., 0.), (KeyCode::Up, 0., -1.), (KeyCode::Down, 0., 1.)];
+    let movements = [(KeyCode::Left, 1., 0.), (KeyCode::Right, -1., 0.), (KeyCode::Up, 0., 1.), (KeyCode::Down, 0., -1.)];
     for (key, dx, dy) in &movements {
         if is_key_down(*key) {
             *x_shift += dx * 10.;
@@ -124,16 +123,33 @@ fn change_center(x_shift: &mut f64, y_shift: &mut f64) -> bool {
 
 }
 
+fn change_c(c: &mut ComplexNumber) {
+    let (dx, dy) = (0.001, 0.001); 
+    if is_key_down(KeyCode::W) {
+        c.i += dy;
+    }
+    if is_key_down(KeyCode::A) {
+        c.r -= dx;
+    }
+    if is_key_down(KeyCode::S) {
+        c.i -= dy;
+    }
+    if is_key_down(KeyCode::D) {
+        c.r += dx;
+    }
+}
+
 #[macroquad::main("Julia Sets :)")]
 async fn main() {
     let mut zoom = 250.;
-    let c = ComplexNumber::new(-0.391, -0.587);
+    let mut c = ComplexNumber::new(-0.391, -0.587);
     let mut x_shift =  screen_width().ceil() as f64 / 2.;
     let mut y_shift =  screen_height().ceil() as f64 / 2.;
     loop {
-        println!("frame");
-        let zoomed = change_zoom(&mut zoom);
-        let moved = change_center(&mut x_shift, &mut y_shift);
+        println!("{}", get_frame_time());
+        change_zoom(&mut zoom);
+        change_center(&mut x_shift, &mut y_shift);
+        change_c(&mut c);
         draw_julia(x_shift.clone(), y_shift.clone(), zoom.clone(), c.clone());
         next_frame().await
     }
