@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 macroquad = "0.3"
 colorgrad = "0.6"
+cached = "0.44"

@@ -2,12 +2,12 @@ use macroquad::prelude::*;
 use std::sync::mpsc;
 use std::thread;
 use colorgrad;
-
-
+use cached::proc_macro::cached;
+use std::hash;
 const MAX_ITERATIONS: i32 = 1_000;
 const CUT_OFF_BOUND: f32 = 2.;
 const CUT_OFF_BOUND_SQUARED: f32 = CUT_OFF_BOUND * CUT_OFF_BOUND;
-const ANTI_ALIASING_POINTS: i32 = 0;
+const ANTI_ALIASING_POINTS: i32 = 5;
 
 
 #[derive(Debug, Copy, Clone)]
@@ -49,6 +49,15 @@ impl std::ops::Div<f32> for ComplexNumber {
     }
 }
 
+impl hash::Hash for ComplexNumber {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: hash::Hasher,
+    {
+        (self.r.to_bits(), self.i.to_bits()).hash(state)
+    }
+}
+
 impl ComplexNumber {
     fn new(x: f32, y: f32) -> Self {
         Self { r: x, i: y }
@@ -65,7 +74,7 @@ impl ComplexNumber {
     fn julia_iteration(&mut self, c: ComplexNumber) {
         *self = *self * *self + c;
     }
-
+    
     fn compute_iterations(mut self, c: ComplexNumber) -> f32 {
         for i in 0..MAX_ITERATIONS {
             if self.abs_squared() > CUT_OFF_BOUND_SQUARED {
@@ -73,6 +82,7 @@ impl ComplexNumber {
             }
             self.julia_iteration(c);
         }
+
         return MAX_ITERATIONS as f32;
     }
 }
@@ -84,8 +94,6 @@ fn smooth_index(num_iterations: f32, c: &ComplexNumber) -> f32 {
 
 
 fn julia_color(continuous_index: f32) -> Color {
-    if continuous_index.round() as i32 == MAX_ITERATIONS {return BLACK;}
-
     let grad = colorgrad::CustomGradient::new().colors(
         &[
             colorgrad::Color::from_rgba8(102, 143, 204, 255),
@@ -100,7 +108,7 @@ fn julia_color(continuous_index: f32) -> Color {
 
 
 fn julia_black_white(num_iterations: f32) -> Color {
-    let intensity = num_iterations / MAX_ITERATIONS as f32;
+    let intensity = num_iterations / (MAX_ITERATIONS as f32);
 
     Color {
         r: intensity,
@@ -144,38 +152,25 @@ fn draw_julia_row(
         // Type coercion 
         let (x, y) = (x as f32, y as f32);
 
-        let point = ComplexNumber::new((x- x_shift) / zoom, -(y - y_shift)/ zoom);
+        let point = ComplexNumber::new(x- x_shift, -y + y_shift) / zoom;
         let num_iterations = point.compute_iterations(c);
+        let mut iterations = Vec::new();
+        iterations.push(num_iterations);
+
+        for i in 0..ANTI_ALIASING_POINTS {
+            let theta = (i as f32) / (ANTI_ALIASING_POINTS as f32);
+            let offset = ComplexNumber::new(f32::sin(theta), -f32::cos(theta)) / zoom;
+            iterations.push((point + offset).compute_iterations(c));
+        }
+
+        let average_iterations = iterations.iter().sum::<f32>() / iterations.len() as f32;
         if colored {
-            colors.push(julia_color(num_iterations));
+            colors.push(julia_color(smooth_index(average_iterations, &c)));
         } else {
-            colors.push(julia_black_white(num_iterations));
+            colors.push(julia_black_white(smooth_index(average_iterations, &c)));
         }
     }
-    return (y, colors);
-    //     let (x, y) = (x as f32, y as f32);
-
-    //     let mut iterations = Vec::new();
-    //     let point = ComplexNumber::new(x - x_shift, -y - y_shift) / zoom;
-    //     iterations.push(point.compute_iterations(c));
-        
-    //     println!("{:?}", iterations);
-        
-    //     for i in 0..ANTI_ALIASING_POINTS {
-    //         let theta = (i as f32) / (ANTI_ALIASING_POINTS as f32) * std::f32::consts::TAU;
-    //         let temp = ComplexNumber::new(f32::cos(theta), f32::sin(theta));
-    //         let point = ComplexNumber::new(x as f32 - x_shift, -y as f32 - y_shift) + temp;
-
-    //         iterations.push((point/zoom).compute_iterations(c) as f32);
-    //     }
-    //     let num_iterations = iterations.iter().sum::<f32>() / iterations.len() as f32;
-    //     if colored {
-    //         colors.push(julia_color(smooth_index(num_iterations, &c)));
-    //     } else {
-    //         colors.push(julia_black_white(num_iterations));
-    //     }
-    // }
-    // return (y, colors);
+    return (y, colors); 
 }
 
 fn change_zoom(zoom: &mut f32) -> bool {
