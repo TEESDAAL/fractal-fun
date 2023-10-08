@@ -2,7 +2,6 @@ use macroquad::prelude::*;
 use std::sync::mpsc;
 use std::thread;
 use colorgrad;
-use cached::proc_macro::cached;
 use std::hash;
 const MAX_ITERATIONS: i32 = 1_000;
 const CUT_OFF_BOUND: f32 = 2.;
@@ -40,7 +39,7 @@ impl std::ops::Add<ComplexNumber> for ComplexNumber {
 
 impl std::ops::Div<f32> for ComplexNumber {
     type Output = ComplexNumber;
-    
+
     fn div(self, other: f32) -> ComplexNumber {
         ComplexNumber {
             r: self.r / other,
@@ -74,7 +73,7 @@ impl ComplexNumber {
     fn julia_iteration(&mut self, c: ComplexNumber) {
         *self = *self * *self + c;
     }
-    
+
     fn compute_iterations(mut self, c: ComplexNumber) -> f32 {
         for i in 0..MAX_ITERATIONS {
             if self.abs_squared() > CUT_OFF_BOUND_SQUARED {
@@ -235,6 +234,7 @@ async fn main() {
     let mut zoom = 250.;
     let mut colored = false;
     let mut c = ComplexNumber::new(-0.391, -0.587);
+    // let mut c = ComplexNumber::new(0., 0.);
     let mut x_shift = screen_width().ceil() / 2.;
     let mut y_shift = screen_height().ceil() / 2.;
 
@@ -253,6 +253,7 @@ async fn main() {
             c.clone(),
             colored.clone(),
         );
+        draw_text(&format!("r: {}, i: {} ", c.r, c.i), 15., 30., 30., RED);
         next_frame().await
     }
 }
